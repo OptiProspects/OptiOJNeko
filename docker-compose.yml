@@ -1,0 +1,42 @@
+services:
+  judge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - optioj/judge:latest
+    container_name: opti-neko
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - .:/workspace/opti-neko
+      - cargo-cache:/root/.cargo/registry
+      - target-cache:/workspace/opti-neko/target
+      - temp-data:/workspace/opti-neko/temp
+    environment:
+      - TZ=Asia/Shanghai
+      - RUST_LOG=info
+      - HOST=0.0.0.0
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: "128M"
+    restart: unless-stopped
+    networks:
+      - judge_network
+
+networks:
+  judge_network:
+    driver: bridge
+
+volumes:
+  cargo-cache:
+  target-cache:
+  submission-data:
+  testcase-data:
+  temp-data:
