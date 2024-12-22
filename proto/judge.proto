@@ -2,22 +2,37 @@ syntax = "proto3";
 
 package judge_grpc_service;
 
+option go_package = "OptiOJ/src/proto/judge_grpc_service";
+
 service JudgeGrpcService {
     rpc Submit(SubmitRequest) returns (SubmitResponse);
+}
+
+message TestCase {
+    string input = 1;
+    string expected_output = 2;
 }
 
 message SubmitRequest {
     string language = 1;
     string source_code = 2;
-    string input = 3;
-    string expected_output = 4;
-    int64 time_limit = 5; // 以秒为单位
-    uint64 memory_limit = 6; // 以字节为单位
+    int32 time_limit = 3;  // 单位：毫秒
+    int32 memory_limit = 4;  // 单位：MB
+    repeated TestCase test_cases = 5;  // 多个测试点
+}
+
+message TestCaseResult {
+    int32 status = 1;
+    double time_used = 2;  // 单位：毫秒
+    double memory_used = 3;  // 单位：KB
+    string actual_output = 4;
+    int32 test_case_id = 5;
 }
 
 message SubmitResponse {
-    int32 status = 1; // JudgeStatus
-    double time_used = 2; // 以秒为单位
-    double memory_used = 3; // 以 KB 为单位，保留两位小数
-    string error_message = 4; // 错误信息
+    int32 status = 1;
+    double time_used = 2;  // 单位：毫秒
+    double memory_used = 3;  // 单位：KB
+    string error_message = 4;
+    repeated TestCaseResult test_case_results = 5;  // 每个测试点的结果
 }

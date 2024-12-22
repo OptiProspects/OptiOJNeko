@@ -18,6 +18,7 @@ services:
       - TZ=Asia/Shanghai
       - RUST_LOG=info
       - HOST=0.0.0.0
+      - PRINT_TESTCASE_DETAILS=true
     deploy:
       resources:
         limits:

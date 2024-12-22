@@ -1,6 +1,8 @@
 use crate::grpc::judge_grpc_service::judge_grpc_service_server::JudgeGrpcService;
-use crate::grpc::judge_grpc_service::{SubmitRequest, SubmitResponse};
-use opti_neko::judge::{Judge, JudgeConfig, TestCase};
+use crate::grpc::judge_grpc_service::{
+    SubmitRequest, SubmitResponse, TestCase as GrpcTestCase, TestCaseResult as GrpcTestCaseResult,
+};
+use opti_neko::judge::{Judge, JudgeConfig, TestCase, TestCaseResult};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -55,19 +57,22 @@ impl JudgeGrpcService for JudgeGrpcServiceImpl {
             return Err(Status::invalid_argument("内存限制必须大于0"));
         }
 
+        if req.test_cases.is_empty() {
+            error!("测试点不能为空");
+            return Err(Status::invalid_argument("测试点不能为空"));
+        }
+
         info!(
             language = %req.language,
             time_limit = %req.time_limit,
             memory_limit = %req.memory_limit,
+            test_cases_count = %req.test_cases.len(),
             "收到新的提交请求"
         );
 
         let judge_config = JudgeConfig {
-            time_limit: Duration::from_millis(u64::try_from(req.time_limit).map_err(|e| {
-                error!("时间限制必须为非负数: {}", e);
-                Status::invalid_argument("时间限制必须为非负数")
-            })?),
-            memory_limit: req.memory_limit * 1024 * 1024,
+            time_limit: Duration::from_millis(req.time_limit as u64),
+            memory_limit: (req.memory_limit as u64) * 1024 * 1024, // 转换 MB 到字节
             language: req.language,
             source_code: req.source_code,
         };
@@ -75,13 +80,17 @@ impl JudgeGrpcService for JudgeGrpcServiceImpl {
         let mut judge = self.judge.lock().await;
         *judge = Judge::new(judge_config);
 
-        let test_case = TestCase {
-            input: req.input.clone(),
-            expected_output: req.expected_output.clone(),
-        };
+        let test_cases: Vec<TestCase> = req
+            .test_cases
+            .into_iter()
+            .map(|tc: GrpcTestCase| TestCase {
+                input: tc.input,
+                expected_output: tc.expected_output,
+            })
+            .collect();
 
         info!("开始执行判题");
-        let result = match judge.judge(&test_case).await {
+        let result = match judge.judge_all(&test_cases).await {
             Ok(r) => r,
             Err(e) => {
                 error!("判题执行失败: {}", e);
@@ -96,18 +105,25 @@ impl JudgeGrpcService for JudgeGrpcServiceImpl {
             "判题完成"
         );
 
-        info!("转换前 - memory_used (bytes): {}", result.memory_used);
-
-        let memory_kb = (result.memory_used as f64 / 1024.0 * 100.0).round() / 100.0;
+        let test_case_results: Vec<GrpcTestCaseResult> = result
+            .test_case_results
+            .into_iter()
+            .map(|tcr: TestCaseResult| GrpcTestCaseResult {
+                status: tcr.status as i32,
+                time_used: tcr.time_used.as_millis() as f64,
+                memory_used: (tcr.memory_used as f64 / 1024.0 * 100.0).round() / 100.0,
+                actual_output: tcr.actual_output,
+                test_case_id: tcr.test_case_id as i32,
+            })
+            .collect();
 
         let response = SubmitResponse {
             status: result.status as i32,
             time_used: result.time_used.as_millis() as f64,
-            memory_used: memory_kb,
+            memory_used: (result.memory_used as f64 / 1024.0 * 100.0).round() / 100.0,
             error_message: result.error_message.unwrap_or_default(),
+            test_case_results,
         };
-
-        info!("转换后 - memory_used (KB): {:.2}", response.memory_used);
 
         Ok(Response::new(response))
     }

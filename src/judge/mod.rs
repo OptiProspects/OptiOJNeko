@@ -5,6 +5,7 @@ mod types;
 use anyhow::Result;
 use checker::Checker;
 use runner::Runner;
+use std::env;
 use std::time::Duration;
 pub use types::*;
 
@@ -27,6 +28,10 @@ impl Judge {
     pub async fn judge_all(&self, test_cases: &[TestCase]) -> Result<JudgeResult> {
         println!("开始判题...");
 
+        let print_details = env::var("PRINT_TESTCASE_DETAILS")
+            .map(|v| v.to_lowercase() == "true")
+            .unwrap_or(false);
+
         if let Err(e) = self.runner.compile().await {
             println!("编译错误: {}", e);
             return Ok(JudgeResult {
@@ -46,12 +51,20 @@ impl Judge {
 
         for (i, test_case) in test_cases.iter().enumerate() {
             println!("\n测试点 #{}", i + 1);
+
+            if print_details {
+                println!("输入数据:\n{}", test_case.input.trim());
+                println!("预期输出:\n{}", test_case.expected_output.trim());
+            }
+
             match self.runner.run(&test_case.input).await {
                 Ok((output, time_used, memory_used)) => {
                     println!("运行时间: {:?}", time_used);
                     println!("内存使用: {} bytes", memory_used);
-                    println!("程序输出: {}", output.trim());
-                    println!("期望输出: {}", test_case.expected_output.trim());
+
+                    if print_details {
+                        println!("实际输出:\n{}", output.trim());
+                    }
 
                     let status = self.checker.check(test_case, &output);
                     println!("判题结果: {:?}", status);
