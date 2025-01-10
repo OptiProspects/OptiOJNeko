@@ -23,8 +23,8 @@ ENV PATH=/root/.cargo/bin:$PATH
 # 创建工作目录
 WORKDIR /workspace/opti-neko
 
-# 首先只复制 Cargo.toml 和 Cargo.lock 来缓存依赖
-COPY Cargo.toml Cargo.lock ./
+# 首先只复制 Cargo.toml 来缓存依赖
+COPY Cargo.toml ./
 
 # 创建一个空的 main.rs 来构建依赖
 RUN mkdir src && \
